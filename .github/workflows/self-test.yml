@@ -46,6 +46,7 @@ jobs:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
       context: examples/hello
+      severity: critical
 
   scan-trivy:
     uses: ./.github/workflows/container-scan-trivy.yml
@@ -53,6 +54,7 @@ jobs:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
       context: examples/hello
+      severity: CRITICAL
 
   scan-snyk:
     uses: ./.github/workflows/container-scan-snyk.yml

@@ -41,10 +41,10 @@ jobs:
         id: runtime
         run: |
           set -euo pipefail
-          if command -v podman &>/dev/null; then
-            echo "tool=podman" >> "$GITHUB_OUTPUT"
-          elif command -v docker &>/dev/null; then
+          if command -v docker &>/dev/null; then
             echo "tool=docker" >> "$GITHUB_OUTPUT"
+          elif command -v podman &>/dev/null; then
+            echo "tool=podman" >> "$GITHUB_OUTPUT"
           else
             echo "::error::Neither podman nor docker found on this runner."
             exit 1

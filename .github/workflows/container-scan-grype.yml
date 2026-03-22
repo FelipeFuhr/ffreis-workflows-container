@@ -40,10 +40,10 @@ jobs:
         id: runtime
         run: |
           set -euo pipefail
-          if command -v podman &>/dev/null; then
-            echo "tool=podman" >> "$GITHUB_OUTPUT"
-          elif command -v docker &>/dev/null; then
+          if command -v docker &>/dev/null; then
             echo "tool=docker" >> "$GITHUB_OUTPUT"
+          elif command -v podman &>/dev/null; then
+            echo "tool=podman" >> "$GITHUB_OUTPUT"
           else
             echo "::error::Neither podman nor docker found on this runner."
             exit 1
@@ -86,7 +86,7 @@ jobs:
       - name: Install Grype
         run: |
           set -euo pipefail
-          PINNED_COMMIT="c6a67581ab4e7aa494351b919326ad6606af3010"
+          PINNED_COMMIT="dee8de483dfba5b4e0bc0aa8e4ab2ce52137e490"
           SCRIPT_URL="https://raw.githubusercontent.com/anchore/grype/${PINNED_COMMIT}/install.sh"
           mkdir -p ./bin
           curl --fail --show-error --silent --location \
@@ -114,6 +114,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ARCHIVE_NAME: ${{ env.ARCHIVE_NAME }}
+          REPO: ${{ github.repository }}
+          GIT_SHA: ${{ github.sha }}
+          GIT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
           for f in grype-results/*.sarif; do
@@ -122,9 +125,9 @@ jobs:
             sarif_payload="$(gzip -c "$f" | base64 | tr -d '\n')"
             gh api \
               -X POST \
-              "/repos/${{ github.repository }}/code-scanning/sarifs" \
+              "/repos/${REPO}/code-scanning/sarifs" \
               -f sarif="${sarif_payload}" \
               -f tool_name="grype-${name}" \
-              -f commit_sha="${{ github.sha }}" \
-              -f ref="${{ github.ref }}"
+              -f commit_sha="${GIT_SHA}" \
+              -f ref="${GIT_REF}"
           done

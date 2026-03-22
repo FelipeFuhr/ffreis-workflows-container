@@ -54,10 +54,10 @@ jobs:
         id: runtime
         run: |
           set -euo pipefail
-          if command -v podman &>/dev/null; then
-            echo "tool=podman" >> "$GITHUB_OUTPUT"
-          elif command -v docker &>/dev/null; then
+          if command -v docker &>/dev/null; then
             echo "tool=docker" >> "$GITHUB_OUTPUT"
+          elif command -v podman &>/dev/null; then
+            echo "tool=podman" >> "$GITHUB_OUTPUT"
           else
             echo "::error::Neither podman nor docker found on this runner."
             exit 1
@@ -69,9 +69,11 @@ jobs:
           CONTAINERFILE: ${{ inputs.containerfile }}
           CONTEXT: ${{ inputs.context }}
           BUILD_ARGS: ${{ inputs.build-args }}
+          GIT_SHA: ${{ github.sha }}
           TOOL: ${{ steps.runtime.outputs.tool }}
         run: |
           set -euo pipefail
+          image_lc="${IMAGE,,}"
           extra_args=()
           if [ -n "$BUILD_ARGS" ]; then
             while IFS= read -r arg; do
@@ -81,17 +83,19 @@ jobs:
           fi
           "$TOOL" build \
             -f "$CONTAINERFILE" \
-            -t "$IMAGE:${{ github.sha }}" \
+            -t "$image_lc:$GIT_SHA" \
             "${extra_args[@]+"${extra_args[@]}"}" \
             "$CONTEXT"
 
       - name: Smoke-test image
         env:
           IMAGE: ${{ inputs.image }}
+          GIT_SHA: ${{ github.sha }}
           TOOL: ${{ steps.runtime.outputs.tool }}
         run: |
           set -euo pipefail
-          "$TOOL" image inspect "$IMAGE:${{ github.sha }}" > /dev/null
+          image_lc="${IMAGE,,}"
+          "$TOOL" image inspect "$image_lc:$GIT_SHA" > /dev/null
           echo "Image smoke-test passed."
 
       - name: Login to registry
@@ -99,28 +103,36 @@ jobs:
         env:
           REGISTRY: ${{ inputs.registry }}
           TOKEN: ${{ secrets.REGISTRY_TOKEN || secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
-          echo "$TOKEN" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
+          echo "$TOKEN" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
 
       - name: Push image
         if: inputs.push && github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           IMAGE: ${{ inputs.image }}
+          GIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          docker push "$IMAGE:${{ github.sha }}"
-          docker tag "$IMAGE:${{ github.sha }}" "$IMAGE:latest"
-          docker push "$IMAGE:latest"
+          image_lc="${IMAGE,,}"
+          docker push "$image_lc:$GIT_SHA"
+          docker tag "$image_lc:$GIT_SHA" "$image_lc:latest"
+          docker push "$image_lc:latest"
 
       - name: Set image-ref output
         id: set-output
         env:
           IMAGE: ${{ inputs.image }}
+          PUSH: ${{ inputs.push }}
+          GIT_SHA: ${{ github.sha }}
+          GIT_REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          if [[ "${{ inputs.push }}" == "true" && "${{ github.ref }}" == "refs/heads/main" && "${{ github.event_name }}" == "push" ]]; then
-            echo "image_ref=${IMAGE}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          image_lc="${IMAGE,,}"
+          if [[ "$PUSH" == "true" && "$GIT_REF" == "refs/heads/main" && "$EVENT_NAME" == "push" ]]; then
+            echo "image_ref=${image_lc}:${GIT_SHA}" >> "$GITHUB_OUTPUT"
           else
             echo "image_ref=" >> "$GITHUB_OUTPUT"
           fi
