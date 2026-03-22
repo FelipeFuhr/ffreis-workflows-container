@@ -10,7 +10,7 @@ on:
       hadolint-config:
         description: "Path to .hadolint.yaml config file (optional)"
         type: string
-        default: ".hadolint.yaml"
+        default: ""
 
 permissions:
   contents: read
@@ -33,8 +33,19 @@ jobs:
           output-file: hadolint.sarif
           no-fail: false
 
+      - name: Validate SARIF
+        if: always()
+        id: sarif
+        run: |
+          set -euo pipefail
+          if [ -s hadolint.sarif ]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload SARIF
-        if: always() && hashFiles('hadolint.sarif') != ''
+        if: always() && steps.sarif.outputs.valid == 'true'
         uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f # v3
         with:
           sarif_file: hadolint.sarif

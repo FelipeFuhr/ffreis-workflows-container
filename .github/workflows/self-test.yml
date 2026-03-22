@@ -29,6 +29,7 @@ jobs:
     uses: ./.github/workflows/container-lint.yml
     with:
       containerfile: examples/hello/Containerfile
+      hadolint-config: .hadolint.yaml
 
   build:
     uses: ./.github/workflows/container-build.yml
