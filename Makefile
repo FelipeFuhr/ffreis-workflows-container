@@ -47,4 +47,11 @@ setup: hooks ## Install git hooks and verify required tools
 		echo ""; \
 		exit 1; \
 	}
+	@command -v hadolint >/dev/null 2>&1 || { \
+		echo ""; \
+		echo "ACTION REQUIRED: hadolint is not installed."; \
+		echo "Install it from https://github.com/hadolint/hadolint#install then re-run 'make setup'."; \
+		echo ""; \
+		exit 1; \
+	}
 	@echo "Dev environment ready."
