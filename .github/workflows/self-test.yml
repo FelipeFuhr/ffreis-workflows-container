@@ -33,7 +33,7 @@ jobs:
   build:
     uses: ./.github/workflows/container-build.yml
     with:
-      image: ghcr.io/${{ github.repository_owner }}/hello-example-container
+      image: ghcr.io/${{ github.repository }}/hello-example-container
       context: examples/hello
       containerfile: examples/hello/Containerfile
       push: true
