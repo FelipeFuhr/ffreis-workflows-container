@@ -1,0 +1,78 @@
+name: Self Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Validates that every workflow defined in this library functions correctly
+# against the minimal example image in examples/hello/.
+#
+# container-build pushes to GHCR using GITHUB_TOKEN (always available on
+# non-fork runs). container-sign then signs the pushed image using cosign
+# keyless OIDC — this requires id-token: write, which is unavailable on fork
+# PRs, so the sign job is gated to skip on fork pull requests.
+#
+# container-scan-snyk requires SNYK_TOKEN to be configured in the repository.
+# container-sign requires a pushed image (main branch pushes only).
+# Both are skipped on fork pull requests and fail if their prerequisites are absent.
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  security-events: write
+
+jobs:
+  lint:
+    uses: ./.github/workflows/container-lint.yml
+    with:
+      containerfile: examples/hello/Containerfile
+
+  build:
+    uses: ./.github/workflows/container-build.yml
+    with:
+      image: ghcr.io/${{ github.repository_owner }}/hello-example-container
+      context: examples/hello
+      containerfile: examples/hello/Containerfile
+      push: true
+    secrets:
+      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  scan-grype:
+    uses: ./.github/workflows/container-scan-grype.yml
+    with:
+      image-name: hello-example-container
+      containerfile: examples/hello/Containerfile
+      context: examples/hello
+
+  scan-trivy:
+    uses: ./.github/workflows/container-scan-trivy.yml
+    with:
+      image-name: hello-example-container
+      containerfile: examples/hello/Containerfile
+      context: examples/hello
+
+  scan-snyk:
+    uses: ./.github/workflows/container-scan-snyk.yml
+    with:
+      image-name: hello-example-container
+      containerfile: examples/hello/Containerfile
+      context: examples/hello
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  sbom:
+    uses: ./.github/workflows/container-sbom.yml
+    with:
+      image-name: hello-example-container
+      containerfile: examples/hello/Containerfile
+      context: examples/hello
+
+  sign:
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/container-sign.yml
+    with:
+      image-ref: ${{ needs.build.outputs.image_ref }}

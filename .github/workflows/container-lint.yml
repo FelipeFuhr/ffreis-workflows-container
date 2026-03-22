@@ -1,0 +1,41 @@
+name: Container Lint
+
+on:
+  workflow_call:
+    inputs:
+      containerfile:
+        description: "Path to the Containerfile or Dockerfile to lint"
+        type: string
+        required: true
+      hadolint-config:
+        description: "Path to .hadolint.yaml config file (optional)"
+        type: string
+        default: ".hadolint.yaml"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  lint:
+    name: Hadolint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Lint Containerfile
+        uses: hadolint/hadolint-action@4b5806eb9c6bee4954fc0e0cc3ad9175b8c37592 # v3
+        with:
+          dockerfile: ${{ inputs.containerfile }}
+          config: ${{ inputs.hadolint-config }}
+          format: sarif
+          output-file: hadolint.sarif
+          no-fail: false
+
+      - name: Upload SARIF
+        if: always() && hashFiles('hadolint.sarif') != ''
+        uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f # v3
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint

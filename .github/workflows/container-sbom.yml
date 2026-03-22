@@ -1,0 +1,105 @@
+name: Container SBOM
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: "Local image name/tag to build and generate SBOM for"
+        type: string
+        required: true
+      containerfile:
+        description: "Path to the Containerfile or Dockerfile"
+        type: string
+        required: true
+      context:
+        description: "Build context directory"
+        type: string
+        default: "."
+      build-args:
+        description: "Newline-separated build-arg pairs (KEY=VALUE)"
+        type: string
+        default: ""
+      format:
+        description: "SBOM output format: spdx-json or cyclonedx-json"
+        type: string
+        default: "spdx-json"
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    name: SBOM (Syft)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Detect container runtime
+        id: runtime
+        run: |
+          set -euo pipefail
+          if command -v podman &>/dev/null; then
+            echo "tool=podman" >> "$GITHUB_OUTPUT"
+          elif command -v docker &>/dev/null; then
+            echo "tool=docker" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Neither podman nor docker found on this runner."
+            exit 1
+          fi
+
+      - name: Build image
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+          CONTAINERFILE: ${{ inputs.containerfile }}
+          CONTEXT: ${{ inputs.context }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+          TOOL: ${{ steps.runtime.outputs.tool }}
+        run: |
+          set -euo pipefail
+          extra_args=()
+          if [ -n "$BUILD_ARGS" ]; then
+            while IFS= read -r arg; do
+              [ -z "$arg" ] && continue
+              extra_args+=(--build-arg "$arg")
+            done <<< "$BUILD_ARGS"
+          fi
+          "$TOOL" build \
+            -f "$CONTAINERFILE" \
+            -t "$IMAGE_NAME" \
+            "${extra_args[@]+"${extra_args[@]}"}" \
+            "$CONTEXT"
+
+      - name: Install Syft
+        run: |
+          set -euo pipefail
+          PINNED_COMMIT="fc4b866d7640c9b6a4ef7cf75e9e5c7a0e9b9c2c"
+          SCRIPT_URL="https://raw.githubusercontent.com/anchore/syft/${PINNED_COMMIT}/install.sh"
+          mkdir -p ./bin
+          curl --fail --show-error --silent --location \
+            --proto '=https' --proto-redir '=https' \
+            "$SCRIPT_URL" -o /tmp/syft-install.sh
+          grep -q "syft" /tmp/syft-install.sh
+          sh /tmp/syft-install.sh -b ./bin
+          ./bin/syft version
+
+      - name: Generate SBOM
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+          FORMAT: ${{ inputs.format }}
+        run: |
+          set -euo pipefail
+          mkdir -p sbom-results
+          safe_name="$(echo "$IMAGE_NAME" | tr '/:' '--')"
+          output_file="sbom-results/${safe_name}.${FORMAT}.json"
+          ./bin/syft scan "$IMAGE_NAME" \
+            --output "${FORMAT}=${output_file}"
+          test -s "$output_file"
+          echo "SBOM_FILE=${output_file}" >> "$GITHUB_ENV"
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-${{ inputs.format }}
+          path: sbom-results/
+          if-no-files-found: error

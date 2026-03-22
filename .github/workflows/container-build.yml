@@ -1,0 +1,126 @@
+name: Container Build
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Full image name (e.g. ghcr.io/owner/my-service)"
+        type: string
+        required: true
+      containerfile:
+        description: "Path to the Containerfile or Dockerfile"
+        type: string
+        default: "Containerfile"
+      context:
+        description: "Build context directory"
+        type: string
+        default: "."
+      build-args:
+        description: "Newline-separated build-arg pairs (KEY=VALUE)"
+        type: string
+        default: ""
+      push:
+        description: "Push image to registry (only on main branch push events)"
+        type: boolean
+        default: true
+      registry:
+        description: "Container registry hostname"
+        type: string
+        default: "ghcr.io"
+    secrets:
+      REGISTRY_TOKEN:
+        description: "Token for pushing to the registry (GITHUB_TOKEN works for GHCR)"
+        required: false
+    outputs:
+      image_ref:
+        description: "Fully-qualified pushed image reference (image:sha), empty if not pushed"
+        value: ${{ jobs.build.outputs.image_ref }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Container Build
+    runs-on: ubuntu-latest
+    outputs:
+      image_ref: ${{ steps.set-output.outputs.image_ref }}
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Detect container runtime
+        id: runtime
+        run: |
+          set -euo pipefail
+          if command -v podman &>/dev/null; then
+            echo "tool=podman" >> "$GITHUB_OUTPUT"
+          elif command -v docker &>/dev/null; then
+            echo "tool=docker" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Neither podman nor docker found on this runner."
+            exit 1
+          fi
+
+      - name: Build image
+        env:
+          IMAGE: ${{ inputs.image }}
+          CONTAINERFILE: ${{ inputs.containerfile }}
+          CONTEXT: ${{ inputs.context }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+          TOOL: ${{ steps.runtime.outputs.tool }}
+        run: |
+          set -euo pipefail
+          extra_args=()
+          if [ -n "$BUILD_ARGS" ]; then
+            while IFS= read -r arg; do
+              [ -z "$arg" ] && continue
+              extra_args+=(--build-arg "$arg")
+            done <<< "$BUILD_ARGS"
+          fi
+          "$TOOL" build \
+            -f "$CONTAINERFILE" \
+            -t "$IMAGE:${{ github.sha }}" \
+            "${extra_args[@]+"${extra_args[@]}"}" \
+            "$CONTEXT"
+
+      - name: Smoke-test image
+        env:
+          IMAGE: ${{ inputs.image }}
+          TOOL: ${{ steps.runtime.outputs.tool }}
+        run: |
+          set -euo pipefail
+          "$TOOL" image inspect "$IMAGE:${{ github.sha }}" > /dev/null
+          echo "Image smoke-test passed."
+
+      - name: Login to registry
+        if: inputs.push && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          TOKEN: ${{ secrets.REGISTRY_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "$TOKEN" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
+
+      - name: Push image
+        if: inputs.push && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: |
+          set -euo pipefail
+          docker push "$IMAGE:${{ github.sha }}"
+          docker tag "$IMAGE:${{ github.sha }}" "$IMAGE:latest"
+          docker push "$IMAGE:latest"
+
+      - name: Set image-ref output
+        id: set-output
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.push }}" == "true" && "${{ github.ref }}" == "refs/heads/main" && "${{ github.event_name }}" == "push" ]]; then
+            echo "image_ref=${IMAGE}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image_ref=" >> "$GITHUB_OUTPUT"
+          fi
