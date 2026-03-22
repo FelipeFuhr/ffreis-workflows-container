@@ -1,0 +1,133 @@
+name: Container Scan (Grype)
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: "Local image name/tag to build and scan"
+        type: string
+        required: true
+      containerfile:
+        description: "Path to the Containerfile or Dockerfile"
+        type: string
+        required: true
+      context:
+        description: "Build context directory"
+        type: string
+        default: "."
+      build-args:
+        description: "Newline-separated build-arg pairs (KEY=VALUE)"
+        type: string
+        default: ""
+      severity:
+        description: "Minimum severity that causes a non-zero exit (negligible/low/medium/high/critical)"
+        type: string
+        default: "high"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  grype:
+    name: Grype
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Detect container runtime
+        id: runtime
+        run: |
+          set -euo pipefail
+          if command -v docker &>/dev/null; then
+            echo "tool=docker" >> "$GITHUB_OUTPUT"
+          elif command -v podman &>/dev/null; then
+            echo "tool=podman" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Neither podman nor docker found on this runner."
+            exit 1
+          fi
+
+      - name: Build image
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+          CONTAINERFILE: ${{ inputs.containerfile }}
+          CONTEXT: ${{ inputs.context }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+          TOOL: ${{ steps.runtime.outputs.tool }}
+        run: |
+          set -euo pipefail
+          extra_args=()
+          if [ -n "$BUILD_ARGS" ]; then
+            while IFS= read -r arg; do
+              [ -z "$arg" ] && continue
+              extra_args+=(--build-arg "$arg")
+            done <<< "$BUILD_ARGS"
+          fi
+          "$TOOL" build \
+            -f "$CONTAINERFILE" \
+            -t "$IMAGE_NAME" \
+            "${extra_args[@]+"${extra_args[@]}"}" \
+            "$CONTEXT"
+
+      - name: Save image as OCI archive
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+          TOOL: ${{ steps.runtime.outputs.tool }}
+        run: |
+          set -euo pipefail
+          mkdir -p grype-results
+          archive_name="$(echo "$IMAGE_NAME" | tr '/:' '--')"
+          "$TOOL" save --format oci-archive --output "grype-results/${archive_name}.oci.tar" "$IMAGE_NAME" \
+            || "$TOOL" save "$IMAGE_NAME" -o "grype-results/${archive_name}.oci.tar"
+          echo "ARCHIVE_NAME=${archive_name}" >> "$GITHUB_ENV"
+
+      - name: Install Grype
+        run: |
+          set -euo pipefail
+          PINNED_COMMIT="dee8de483dfba5b4e0bc0aa8e4ab2ce52137e490"
+          SCRIPT_URL="https://raw.githubusercontent.com/anchore/grype/${PINNED_COMMIT}/install.sh"
+          mkdir -p ./bin
+          curl --fail --show-error --silent --location \
+            --proto '=https' --proto-redir '=https' \
+            "$SCRIPT_URL" -o /tmp/grype-install.sh
+          grep -q "grype" /tmp/grype-install.sh
+          sh /tmp/grype-install.sh -b ./bin
+          ./bin/grype version
+
+      - name: Scan image
+        env:
+          ARCHIVE_NAME: ${{ env.ARCHIVE_NAME }}
+          SEVERITY: ${{ inputs.severity }}
+        run: |
+          set -euo pipefail
+          out="grype-results/${ARCHIVE_NAME}.sarif"
+          ./bin/grype "oci-archive:grype-results/${ARCHIVE_NAME}.oci.tar" \
+            -o sarif \
+            --file "$out" \
+            --fail-on "$SEVERITY"
+          test -s "$out"
+
+      - name: Upload SARIF
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) && hashFiles('grype-results/*.sarif') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE_NAME: ${{ env.ARCHIVE_NAME }}
+          REPO: ${{ github.repository }}
+          GIT_SHA: ${{ github.sha }}
+          GIT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          for f in grype-results/*.sarif; do
+            name="$(basename "$f" .sarif)"
+            echo "Uploading $f with tool_name grype-${name}"
+            sarif_payload="$(gzip -c "$f" | base64 | tr -d '\n')"
+            gh api \
+              -X POST \
+              "/repos/${REPO}/code-scanning/sarifs" \
+              -f sarif="${sarif_payload}" \
+              -f tool_name="grype-${name}" \
+              -f commit_sha="${GIT_SHA}" \
+              -f ref="${GIT_REF}"
+          done

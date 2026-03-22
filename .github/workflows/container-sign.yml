@@ -1,0 +1,36 @@
+name: Container Sign
+
+on:
+  workflow_call:
+    inputs:
+      image-ref:
+        description: "Fully-qualified pushed image reference to sign (e.g. ghcr.io/owner/image:sha)"
+        type: string
+        required: true
+
+# id-token: write is required for cosign keyless OIDC signing.
+# The calling workflow must grant this permission at the workflow level.
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+jobs:
+  sign:
+    name: Cosign (keyless)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb3b4c87483342194 # v3
+
+      - name: Sign image
+        env:
+          IMAGE_REF: ${{ inputs.image-ref }}
+        run: |
+          set -euo pipefail
+          echo "Signing image: ${IMAGE_REF}"
+          cosign sign --yes "$IMAGE_REF"
+          echo "Image signed successfully."

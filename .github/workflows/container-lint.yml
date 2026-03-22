@@ -1,0 +1,52 @@
+name: Container Lint
+
+on:
+  workflow_call:
+    inputs:
+      containerfile:
+        description: "Path to the Containerfile or Dockerfile to lint"
+        type: string
+        required: true
+      hadolint-config:
+        description: "Path to .hadolint.yaml config file (optional)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  lint:
+    name: Hadolint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Lint Containerfile
+        uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5 # v3.3.0
+        with:
+          dockerfile: ${{ inputs.containerfile }}
+          config: ${{ inputs.hadolint-config }}
+          format: sarif
+          output-file: hadolint.sarif
+          no-fail: false
+
+      - name: Validate SARIF
+        if: always()
+        id: sarif
+        run: |
+          set -euo pipefail
+          if [ -s hadolint.sarif ]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload SARIF
+        if: always() && steps.sarif.outputs.valid == 'true'
+        uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f # v3
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint

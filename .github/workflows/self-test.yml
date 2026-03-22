@@ -1,0 +1,67 @@
+name: Self Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Validates that every workflow defined in this library functions correctly
+# against the minimal example image in examples/hello/.
+#
+# Note: Self-test builds and scans a local image only. It does not push images
+# to registries or run signing, so it remains safe for pull requests.
+#
+# container-scan-snyk requires SNYK_TOKEN to be configured in the repository and
+# is gated to skip on fork pull requests.
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  lint:
+    uses: ./.github/workflows/container-lint.yml
+    with:
+      containerfile: examples/hello/Containerfile
+      hadolint-config: .hadolint.yaml
+
+  build:
+    uses: ./.github/workflows/container-build.yml
+    with:
+      image: hello-example-container
+      context: examples/hello
+      containerfile: examples/hello/Containerfile
+      push: false
+
+  scan-grype:
+    uses: ./.github/workflows/container-scan-grype.yml
+    with:
+      image-name: hello-example-container
+      containerfile: examples/hello/Containerfile
+      context: examples/hello
+      severity: critical
+
+  scan-trivy:
+    uses: ./.github/workflows/container-scan-trivy.yml
+    with:
+      image-name: hello-example-container
+      containerfile: examples/hello/Containerfile
+      context: examples/hello
+      severity: CRITICAL
+
+  scan-snyk:
+    uses: ./.github/workflows/container-scan-snyk.yml
+    with:
+      image-name: hello-example-container
+      containerfile: examples/hello/Containerfile
+      context: examples/hello
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  sbom:
+    uses: ./.github/workflows/container-sbom.yml
+    with:
+      image-name: hello-example-container
+      containerfile: examples/hello/Containerfile
+      context: examples/hello

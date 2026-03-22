@@ -1,0 +1,235 @@
+name: Container Scan (Trivy)
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: "Local image name/tag to build and scan"
+        type: string
+        required: true
+      containerfile:
+        description: "Path to the Containerfile or Dockerfile"
+        type: string
+        required: true
+      context:
+        description: "Build context directory"
+        type: string
+        default: "."
+      build-args:
+        description: "Newline-separated build-arg pairs (KEY=VALUE)"
+        type: string
+        default: ""
+      severity:
+        description: "Comma-separated severities to report and gate on"
+        type: string
+        default: "HIGH,CRITICAL"
+      trivyignore-file:
+        description: "Path to .trivyignore.yaml suppression file (optional)"
+        type: string
+        default: ".trivyignore.yaml"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy:
+    name: Trivy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Detect container runtime
+        id: runtime
+        run: |
+          set -euo pipefail
+          if command -v docker &>/dev/null; then
+            echo "tool=docker" >> "$GITHUB_OUTPUT"
+          elif command -v podman &>/dev/null; then
+            echo "tool=podman" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Neither podman nor docker found on this runner."
+            exit 1
+          fi
+
+      - name: Build image
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+          CONTAINERFILE: ${{ inputs.containerfile }}
+          CONTEXT: ${{ inputs.context }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+          TOOL: ${{ steps.runtime.outputs.tool }}
+        run: |
+          set -euo pipefail
+          extra_args=()
+          if [ -n "$BUILD_ARGS" ]; then
+            while IFS= read -r arg; do
+              [ -z "$arg" ] && continue
+              extra_args+=(--build-arg "$arg")
+            done <<< "$BUILD_ARGS"
+          fi
+          "$TOOL" build \
+            -f "$CONTAINERFILE" \
+            -t "$IMAGE_NAME" \
+            "${extra_args[@]+"${extra_args[@]}"}" \
+            "$CONTEXT"
+
+      - name: Save image as docker archive
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+          TOOL: ${{ steps.runtime.outputs.tool }}
+        run: |
+          set -euo pipefail
+          mkdir -p trivy-results
+          archive_name="$(echo "$IMAGE_NAME" | tr '/:' '--')"
+          "$TOOL" save --format docker-archive --output "trivy-results/${archive_name}.docker.tar" "$IMAGE_NAME" \
+            || "$TOOL" save "$IMAGE_NAME" -o "trivy-results/${archive_name}.docker.tar"
+          echo "ARCHIVE_NAME=${archive_name}" >> "$GITHUB_ENV"
+
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y wget gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+            gpg --dearmor | \
+            sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | \
+            sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update -qq
+          sudo apt-get install -y trivy
+          trivy --version
+
+      - name: Warm vulnerability DB
+        run: trivy image --download-db-only --no-progress
+
+      - name: Scan image
+        env:
+          ARCHIVE_NAME: ${{ env.ARCHIVE_NAME }}
+          SEVERITY: ${{ inputs.severity }}
+          TRIVYIGNORE: ${{ inputs.trivyignore-file }}
+        run: |
+          set -euo pipefail
+          archive="trivy-results/${ARCHIVE_NAME}.docker.tar"
+          name="${ARCHIVE_NAME}"
+
+          ignorefile_args=()
+          if [ -f "$TRIVYIGNORE" ]; then
+            ignorefile_args+=(--ignorefile "$TRIVYIGNORE")
+          fi
+
+          # SARIF — all severities, for complete GitHub code scanning visibility.
+          trivy image \
+            --input "$archive" \
+            --skip-db-update \
+            --no-progress \
+            "${ignorefile_args[@]+"${ignorefile_args[@]}"}" \
+            --scanners vuln \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            --format sarif \
+            --output "trivy-results/${name}.sarif"
+          test -s "trivy-results/${name}.sarif"
+
+          # JSON — for trend analysis and triage automation.
+          trivy image \
+            --input "$archive" \
+            --skip-db-update \
+            --no-progress \
+            "${ignorefile_args[@]+"${ignorefile_args[@]}"}" \
+            --scanners vuln \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            --format json \
+            --output "trivy-results/${name}.json"
+          test -s "trivy-results/${name}.json"
+
+          # Human-readable full report in CI logs.
+          echo "Full vulnerability report for ${name} (all severities):"
+          trivy image \
+            --input "$archive" \
+            --skip-db-update \
+            --no-progress \
+            "${ignorefile_args[@]+"${ignorefile_args[@]}"}" \
+            --scanners vuln \
+            --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            --format table
+
+          # Gate check — capture result into a status file; never fail-fast mid-scan
+          # so that SARIF/JSON artifacts are always uploaded even on failures.
+          echo "Gating on ${SEVERITY} vulnerabilities..."
+          if ! trivy image \
+            --input "$archive" \
+            --skip-db-update \
+            --no-progress \
+            "${ignorefile_args[@]+"${ignorefile_args[@]}"}" \
+            --scanners vuln \
+            --severity "$SEVERITY" \
+            --exit-code 1 \
+            --format table; then
+            echo "FAIL" > "trivy-results/${name}.gate-status"
+          else
+            echo "PASS" > "trivy-results/${name}.gate-status"
+          fi
+
+      - name: Upload Trivy JSON reports
+        if: always() && hashFiles('trivy-results/*.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: trivy-json-reports
+          path: trivy-results/*.json
+          if-no-files-found: ignore
+
+      - name: Upload Trivy SARIF
+        if: always() && hashFiles('trivy-results/*.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          GIT_SHA: ${{ github.sha }}
+          GIT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in trivy-results/*.sarif; do
+            name="$(basename "$f" .sarif)"
+            echo "Uploading $f with tool_name trivy-${name}"
+            sarif_payload="$(gzip -c "$f" | base64 | tr -d '\n')"
+            gh api \
+              -X POST \
+              "/repos/${REPO}/code-scanning/sarifs" \
+              -f sarif="${sarif_payload}" \
+              -f tool_name="trivy-${name}" \
+              -f commit_sha="${GIT_SHA}" \
+              -f ref="${GIT_REF}"
+          done
+
+      - name: Check gate results
+        if: always() && hashFiles('trivy-results/*.gate-status') != ''
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          failed=0
+          gate_files=(trivy-results/*.gate-status)
+          if [ ${#gate_files[@]} -eq 0 ]; then
+            echo "::error::No gate status files found — scan phase did not complete."
+            exit 1
+          fi
+          for f in "${gate_files[@]}"; do
+            name="$(basename "$f" .gate-status)"
+            status="$(cat "$f")"
+            if [ "$status" = "FAIL" ]; then
+              echo "::error::Image ${name} failed the vulnerability gate."
+              failed=1
+            elif [ "$status" = "PASS" ]; then
+              echo "Image ${name} passed the vulnerability gate."
+            else
+              echo "::error::Image ${name} has unexpected gate status: ${status}"
+              failed=1
+            fi
+          done
+          exit $failed

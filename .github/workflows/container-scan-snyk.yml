@@ -1,0 +1,109 @@
+name: Container Scan (Snyk)
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: "Local image name/tag to build and scan"
+        type: string
+        required: true
+      containerfile:
+        description: "Path to the Containerfile or Dockerfile"
+        type: string
+        required: true
+      context:
+        description: "Build context directory"
+        type: string
+        default: "."
+      build-args:
+        description: "Newline-separated build-arg pairs (KEY=VALUE)"
+        type: string
+        default: ""
+    secrets:
+      SNYK_TOKEN:
+        description: "Snyk API token — required; configure this secret to enable scanning"
+        required: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  snyk:
+    name: Snyk
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Detect container runtime
+        id: runtime
+        run: |
+          set -euo pipefail
+          if command -v docker &>/dev/null; then
+            echo "tool=docker" >> "$GITHUB_OUTPUT"
+          elif command -v podman &>/dev/null; then
+            echo "tool=podman" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Neither podman nor docker found on this runner."
+            exit 1
+          fi
+
+      - name: Build image
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+          CONTAINERFILE: ${{ inputs.containerfile }}
+          CONTEXT: ${{ inputs.context }}
+          BUILD_ARGS: ${{ inputs.build-args }}
+          TOOL: ${{ steps.runtime.outputs.tool }}
+        run: |
+          set -euo pipefail
+          extra_args=()
+          if [ -n "$BUILD_ARGS" ]; then
+            while IFS= read -r arg; do
+              [ -z "$arg" ] && continue
+              extra_args+=(--build-arg "$arg")
+            done <<< "$BUILD_ARGS"
+          fi
+          "$TOOL" build \
+            -f "$CONTAINERFILE" \
+            -t "$IMAGE_NAME" \
+            "${extra_args[@]+"${extra_args[@]}"}" \
+            "$CONTEXT"
+
+      - name: Setup Node.js (for Snyk CLI)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Install Snyk CLI
+        run: |
+          set -euo pipefail
+          npm install -g snyk@1.1296.2
+          snyk --version
+
+      - name: Snyk container scan
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+        run: |
+          set -euo pipefail
+          mkdir -p snyk-results
+          set +e
+          snyk container test "$IMAGE_NAME" \
+            --sarif-file-output=snyk-results/container.sarif
+          snyk_exit_code=$?
+          set -e
+          if [ "$snyk_exit_code" -ne 0 ] && [ "$snyk_exit_code" -ne 1 ]; then
+            echo "::error::Snyk scan failed with unexpected exit code: $snyk_exit_code"
+            exit "$snyk_exit_code"
+          fi
+          test -s snyk-results/container.sarif
+
+      - name: Upload Snyk container SARIF
+        if: hashFiles('snyk-results/container.sarif') != ''
+        uses: github/codeql-action/upload-sarif@ff0a06e83cb2de871e5a09832bc6a81e7276941f # v3
+        with:
+          sarif_file: snyk-results/container.sarif
+          category: snyk-container
