@@ -80,7 +80,7 @@ jobs:
       - name: Install Snyk CLI
         run: |
           set -euo pipefail
-          npm install -g snyk
+          npm install -g snyk@1.1296.2
           snyk --version
 
       - name: Snyk container scan
@@ -90,9 +90,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p snyk-results
+          set +e
           snyk container test "$IMAGE_NAME" \
-            --sarif-file-output=snyk-results/container.sarif \
-            || true
+            --sarif-file-output=snyk-results/container.sarif
+          snyk_exit_code=$?
+          set -e
+          if [ "$snyk_exit_code" -ne 0 ] && [ "$snyk_exit_code" -ne 1 ]; then
+            echo "::error::Snyk scan failed with unexpected exit code: $snyk_exit_code"
+            exit "$snyk_exit_code"
+          fi
           test -s snyk-results/container.sarif
 
       - name: Upload Snyk container SARIF

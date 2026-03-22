@@ -104,21 +104,23 @@ jobs:
           REGISTRY: ${{ inputs.registry }}
           TOKEN: ${{ secrets.REGISTRY_TOKEN || secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.actor }}
+          TOOL: ${{ steps.runtime.outputs.tool }}
         run: |
           set -euo pipefail
-          echo "$TOKEN" | docker login "$REGISTRY" -u "$ACTOR" --password-stdin
+          echo "$TOKEN" | "$TOOL" login "$REGISTRY" -u "$ACTOR" --password-stdin
 
       - name: Push image
         if: inputs.push && github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           IMAGE: ${{ inputs.image }}
           GIT_SHA: ${{ github.sha }}
+          TOOL: ${{ steps.runtime.outputs.tool }}
         run: |
           set -euo pipefail
           image_lc="${IMAGE,,}"
-          docker push "$image_lc:$GIT_SHA"
-          docker tag "$image_lc:$GIT_SHA" "$image_lc:latest"
-          docker push "$image_lc:latest"
+          "$TOOL" push "$image_lc:$GIT_SHA"
+          "$TOOL" tag "$image_lc:$GIT_SHA" "$image_lc:latest"
+          "$TOOL" push "$image_lc:latest"
 
       - name: Set image-ref output
         id: set-output
