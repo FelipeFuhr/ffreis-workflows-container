@@ -22,7 +22,7 @@ on:
       push:
         description: "Push image to registry (only on main branch push events)"
         type: boolean
-        default: true
+        default: false
       registry:
         description: "Container registry hostname"
         type: string
