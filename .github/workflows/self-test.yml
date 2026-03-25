@@ -9,8 +9,8 @@ on:
 # Validates that every workflow defined in this library functions correctly
 # against the minimal example image in examples/hello/.
 #
-# Note: Self-test builds and scans a local image only. It does not push images
-# to registries or run signing, so it remains safe for pull requests.
+# Note: Self-test builds and scans a local image for pull requests. On main
+# branch push events, it also pushes an image to GHCR and runs signing.
 #
 # container-scan-snyk requires SNYK_TOKEN to be configured in the repository and
 # is gated to skip on fork pull requests.
@@ -20,6 +20,9 @@ permissions:
   security-events: write
 
 jobs:
+  workflows-policy:
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-workflows-policy.yml@cd834ffd19f4cf2cef228d8f261db82768e88348
+
   lint:
     uses: ./.github/workflows/container-lint.yml
     with:
@@ -33,6 +36,29 @@ jobs:
       context: examples/hello
       containerfile: examples/hello/Containerfile
       push: false
+
+  build-push:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/container-build.yml
+    with:
+      image: ghcr.io/${{ github.repository_owner }}/hello-example-container
+      context: examples/hello
+      containerfile: examples/hello/Containerfile
+      push: true
+
+  sign:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-push.outputs.image_ref != ''
+    needs: [build-push]
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    uses: ./.github/workflows/container-sign.yml
+    with:
+      image-ref: ${{ needs.build-push.outputs.image_ref }}
 
   scan-grype:
     uses: ./.github/workflows/container-scan-grype.yml
@@ -51,6 +77,7 @@ jobs:
       severity: CRITICAL
 
   scan-snyk:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
     uses: ./.github/workflows/container-scan-snyk.yml
     with:
       image-name: hello-example-container

@@ -17,6 +17,13 @@ corresponding job in `self-test.yml` that calls it against `examples/hello/`.
 
 A workflow that is not exercised by `self-test.yml` is unverified. It will not be merged.
 
+**Exception — repo-maintenance (`devops-*`) workflows**: Workflows prefixed with `devops-`
+(e.g. `devops-automation.yml`, `devops-pr-hygiene.yml`, `devops-security.yml`) are
+repo-maintenance workflows that manage the repository itself (stale issue handling, PR
+labeling, scorecard, secret scanning, etc.). They are not container workflows and cannot
+be meaningfully exercised against `examples/hello/`. These files are **exempt** from the
+self-test requirement.
+
 **Two jobs in this repo require explicit job-level gates in `self-test.yml`:**
 
 - **`container-sign`** — requires a pushed image and `id-token: write` OIDC permissions.
