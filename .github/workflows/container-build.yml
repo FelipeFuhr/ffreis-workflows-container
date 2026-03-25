@@ -19,6 +19,10 @@ on:
         description: "Newline-separated build-arg pairs (KEY=VALUE)"
         type: string
         default: ""
+      skip-if-missing:
+        description: "Skip the build if the containerfile does not exist"
+        type: boolean
+        default: false
       push:
         description: "Push image to registry (only on main branch push events)"
         type: boolean
@@ -49,7 +53,26 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
+      - name: Check containerfile exists
+        id: exists
+        env:
+          CONTAINERFILE: ${{ inputs.containerfile }}
+          SKIP: ${{ inputs.skip-if-missing }}
+        run: |
+          set -euo pipefail
+          if [[ "$SKIP" != "true" ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ -f "$CONTAINERFILE" ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping build: containerfile not found: $CONTAINERFILE"
+          fi
+
       - name: Detect container runtime
+        if: steps.exists.outputs.present == 'true'
         id: runtime
         run: |
           set -euo pipefail
@@ -63,6 +86,7 @@ jobs:
           fi
 
       - name: Build image
+        if: steps.exists.outputs.present == 'true'
         env:
           IMAGE: ${{ inputs.image }}
           CONTAINERFILE: ${{ inputs.containerfile }}
@@ -87,6 +111,7 @@ jobs:
             "$CONTEXT"
 
       - name: Smoke-test image
+        if: steps.exists.outputs.present == 'true'
         env:
           IMAGE: ${{ inputs.image }}
           GIT_SHA: ${{ github.sha }}
@@ -98,7 +123,7 @@ jobs:
           echo "Image smoke-test passed."
 
       - name: Login to registry
-        if: inputs.push && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: steps.exists.outputs.present == 'true' && inputs.push && github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           REGISTRY: ${{ inputs.registry }}
           TOKEN: ${{ secrets.REGISTRY_TOKEN || secrets.GITHUB_TOKEN }}
@@ -109,7 +134,7 @@ jobs:
           echo "$TOKEN" | "$TOOL" login "$REGISTRY" -u "$ACTOR" --password-stdin
 
       - name: Push image
-        if: inputs.push && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: steps.exists.outputs.present == 'true' && inputs.push && github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           IMAGE: ${{ inputs.image }}
           GIT_SHA: ${{ github.sha }}
@@ -129,10 +154,13 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           GIT_REF: ${{ github.ref }}
           EVENT_NAME: ${{ github.event_name }}
+          PRESENT: ${{ steps.exists.outputs.present }}
         run: |
           set -euo pipefail
           image_lc="${IMAGE,,}"
-          if [[ "$PUSH" == "true" && "$GIT_REF" == "refs/heads/main" && "$EVENT_NAME" == "push" ]]; then
+          if [[ "$PRESENT" != "true" ]]; then
+            echo "image_ref=" >> "$GITHUB_OUTPUT"
+          elif [[ "$PUSH" == "true" && "$GIT_REF" == "refs/heads/main" && "$EVENT_NAME" == "push" ]]; then
             echo "image_ref=${image_lc}:${GIT_SHA}" >> "$GITHUB_OUTPUT"
           else
             echo "image_ref=" >> "$GITHUB_OUTPUT"
