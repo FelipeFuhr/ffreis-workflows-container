@@ -20,7 +20,7 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-gitleaks.yml@c3436c5a6ff32cfa42a401079a2b09e7724fccdf
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-gitleaks.yml@8cbf0fe3a3b21df8a7be6f0b465453894565f9d3
     with:
       working-directory: "."
       scan-history: true
@@ -31,7 +31,7 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-scan-trivy-fs.yml@c3436c5a6ff32cfa42a401079a2b09e7724fccdf
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-scan-trivy-fs.yml@8cbf0fe3a3b21df8a7be6f0b465453894565f9d3
     with:
       scan-ref: "."
       upload-sarif: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
@@ -41,7 +41,7 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-scan-grype-fs.yml@c3436c5a6ff32cfa42a401079a2b09e7724fccdf
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-scan-grype-fs.yml@8cbf0fe3a3b21df8a7be6f0b465453894565f9d3
     with:
       path: "."
       upload-sarif: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
@@ -52,7 +52,7 @@ jobs:
       contents: read
       actions: read
       security-events: write
-    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-osv-scanner.yml@c3436c5a6ff32cfa42a401079a2b09e7724fccdf
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-osv-scanner.yml@8cbf0fe3a3b21df8a7be6f0b465453894565f9d3
     with:
       working-directory: "."
       upload-sarif: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
