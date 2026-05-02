@@ -16,7 +16,7 @@ on:
 permissions:
   contents: read
   actions: read
-  security-events: read
+  security-events: write
   issues: read
   pull-requests: read
   packages: read
