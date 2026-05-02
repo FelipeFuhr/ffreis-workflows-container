@@ -104,3 +104,8 @@ jobs:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
       context: examples/hello
+
+  sonarcloud:
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-sonarcloud.yml@main # NOSONAR: self-referential org workflow — pinning to a SHA creates a bootstrap cycle
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
