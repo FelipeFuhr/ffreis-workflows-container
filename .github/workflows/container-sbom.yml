@@ -80,7 +80,7 @@ jobs:
             --proto '=https' --proto-redir '=https' \
             "$SCRIPT_URL" -o /tmp/syft-install.sh
           grep -q "syft" /tmp/syft-install.sh
-          sh /tmp/syft-install.sh -b ./bin
+          sh /tmp/syft-install.sh -b ./bin v1.44.0
           ./bin/syft version
 
       - name: Generate SBOM
