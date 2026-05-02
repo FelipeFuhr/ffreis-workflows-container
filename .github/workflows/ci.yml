@@ -33,7 +33,7 @@ jobs:
       upload-sarif: false
 
   lint:
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-lint.yml@main # NOSONAR: self-referential — pinning to a SHA creates a bootstrap cycle
+    uses: ./.github/workflows/container-lint.yml
     with:
       containerfile: examples/hello/Containerfile
       hadolint-config: .hadolint.yaml
@@ -41,8 +41,7 @@ jobs:
   build:
     permissions:
       contents: read
-      packages: write
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-build.yml@main # NOSONAR: self-referential — pinning to a SHA creates a bootstrap cycle
+    uses: ./.github/workflows/container-build.yml
     with:
       image: hello-example-container
       context: examples/hello
@@ -54,7 +53,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-build.yml@main # NOSONAR: self-referential — pinning to a SHA creates a bootstrap cycle
+    uses: ./.github/workflows/container-build.yml
     with:
       image: ghcr.io/${{ github.repository_owner }}/hello-example-container
       context: examples/hello
@@ -68,12 +67,12 @@ jobs:
       contents: read
       id-token: write
       packages: write
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-sign.yml@main # NOSONAR: self-referential — pinning to a SHA creates a bootstrap cycle
+    uses: ./.github/workflows/container-sign.yml
     with:
       image-ref: ${{ needs.build-push.outputs.image_ref }}
 
   scan-grype:
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-scan-grype.yml@main # NOSONAR: self-referential — pinning to a SHA creates a bootstrap cycle
+    uses: ./.github/workflows/container-scan-grype.yml
     with:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
@@ -81,7 +80,7 @@ jobs:
       severity: critical
 
   scan-trivy:
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-scan-trivy.yml@main # NOSONAR: self-referential — pinning to a SHA creates a bootstrap cycle
+    uses: ./.github/workflows/container-scan-trivy.yml
     with:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
@@ -90,7 +89,7 @@ jobs:
 
   scan-snyk:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-scan-snyk.yml@main # NOSONAR: self-referential — pinning to a SHA creates a bootstrap cycle
+    uses: ./.github/workflows/container-scan-snyk.yml
     with:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
@@ -99,13 +98,14 @@ jobs:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   sbom:
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-sbom.yml@main # NOSONAR: self-referential — pinning to a SHA creates a bootstrap cycle
+    uses: ./.github/workflows/container-sbom.yml
     with:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
       context: examples/hello
 
   sonarcloud:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
     uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-sonarcloud.yml@2c051eb6d9aa5ecea3e969d7e2fd2b4e21a002d6 # v1.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
