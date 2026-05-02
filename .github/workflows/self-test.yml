@@ -38,6 +38,9 @@ jobs:
       hadolint-config: .hadolint.yaml
 
   build:
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/container-build.yml
     with:
       image: hello-example-container
