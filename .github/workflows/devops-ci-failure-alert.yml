@@ -1,0 +1,19 @@
+name: DevOps / CI Failure Alert
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Self Test
+      - DevOps / Security
+    types: [completed]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  alert:
+    if: github.event.workflow_run.conclusion == 'failure'
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-workflow-failure-alert.yml@ff9a8d7436e2e077ac3f19de60b292b60a3bd28f # v1.0.1+
+    permissions:
+      pull-requests: write

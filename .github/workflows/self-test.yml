@@ -3,6 +3,8 @@ name: Self Test
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 # Validates that every workflow defined in this library functions correctly
 # against the minimal example image in examples/hello/.
