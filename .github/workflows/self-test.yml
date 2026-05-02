@@ -17,26 +17,28 @@ permissions:
   contents: read
   actions: read
   security-events: write
+  issues: write
+  pull-requests: write
 
 jobs:
   workflows-policy:
-    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-workflows-policy.yml@main
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-workflows-policy.yml@9122525162705ed0676ed066e788f2e531a25bea # v1.0.0
 
   codeql-actions:
-    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-codeql.yml@main
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-codeql.yml@9122525162705ed0676ed066e788f2e531a25bea # v1.0.0
     with:
       languages: actions
       source-root: .
       upload-sarif: false
 
   lint:
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-lint.yml@main
+    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-lint.yml@ec49b9a5eeea8286d468e6b658dc8fca65ca2931 # main
     with:
       containerfile: examples/hello/Containerfile
       hadolint-config: .hadolint.yaml
 
   build:
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-build.yml@main
+    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-build.yml@ec49b9a5eeea8286d468e6b658dc8fca65ca2931 # main
     with:
       image: hello-example-container
       context: examples/hello
@@ -48,7 +50,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-build.yml@main
+    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-build.yml@ec49b9a5eeea8286d468e6b658dc8fca65ca2931 # main
     with:
       image: ghcr.io/${{ github.repository_owner }}/hello-example-container
       context: examples/hello
@@ -62,12 +64,12 @@ jobs:
       contents: read
       id-token: write
       packages: write
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-sign.yml@main
+    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-sign.yml@ec49b9a5eeea8286d468e6b658dc8fca65ca2931 # main
     with:
       image-ref: ${{ needs.build-push.outputs.image_ref }}
 
   scan-grype:
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-scan-grype.yml@main
+    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-scan-grype.yml@ec49b9a5eeea8286d468e6b658dc8fca65ca2931 # main
     with:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
@@ -75,7 +77,7 @@ jobs:
       severity: critical
 
   scan-trivy:
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-scan-trivy.yml@main
+    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-scan-trivy.yml@ec49b9a5eeea8286d468e6b658dc8fca65ca2931 # main
     with:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
@@ -84,7 +86,7 @@ jobs:
 
   scan-snyk:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-scan-snyk.yml@main
+    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-scan-snyk.yml@ec49b9a5eeea8286d468e6b658dc8fca65ca2931 # main
     with:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
@@ -93,7 +95,7 @@ jobs:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   sbom:
-    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-sbom.yml@main
+    uses: FelipeFuhr/ffreis-workflows-container/.github/workflows/container-sbom.yml@ec49b9a5eeea8286d468e6b658dc8fca65ca2931 # main
     with:
       image-name: hello-example-container
       containerfile: examples/hello/Containerfile
