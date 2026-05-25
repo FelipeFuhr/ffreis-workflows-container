@@ -12,14 +12,13 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
   lint:
     timeout-minutes: 30
     name: Hadolint
+    permissions:
+      contents: read
+      security-events: write
     runs-on: ubuntu-latest
 
     steps:

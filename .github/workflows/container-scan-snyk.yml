@@ -24,14 +24,14 @@ on:
         description: "Snyk API token — required; configure this secret to enable scanning"
         required: true
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
   snyk:
     timeout-minutes: 30
     name: Snyk
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
 

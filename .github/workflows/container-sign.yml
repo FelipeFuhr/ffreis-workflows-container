@@ -9,16 +9,16 @@ on:
         required: true
 
 # id-token: write is required for cosign keyless OIDC signing.
-# The calling workflow must grant this permission at the workflow level.
-permissions:
-  contents: read
-  id-token: write
-  packages: write
+# The calling workflow must grant this permission on the calling job.
 
 jobs:
   sign:
     timeout-minutes: 30
     name: Cosign (keyless)
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     runs-on: ubuntu-latest
 
     steps:

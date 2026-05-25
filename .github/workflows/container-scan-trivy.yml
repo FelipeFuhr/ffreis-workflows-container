@@ -28,14 +28,14 @@ on:
         type: string
         default: ".trivyignore.yaml"
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
   trivy:
     timeout-minutes: 30
     name: Trivy
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     runs-on: ubuntu-latest
 
     steps:

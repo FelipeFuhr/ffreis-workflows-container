@@ -24,13 +24,12 @@ on:
         type: string
         default: "spdx-json"
 
-permissions:
-  contents: read
-
 jobs:
   sbom:
     timeout-minutes: 30
     name: SBOM (Syft)
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
 
     steps:
