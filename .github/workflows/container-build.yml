@@ -40,14 +40,13 @@ on:
         description: "Fully-qualified pushed image reference (image:sha), empty if not pushed"
         value: ${{ jobs.build.outputs.image_ref }}
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   build:
     timeout-minutes: 30
     name: Container Build
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     outputs:
       image_ref: ${{ steps.set-output.outputs.image_ref }}

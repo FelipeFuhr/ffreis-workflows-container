@@ -13,23 +13,21 @@ on:
 # container-scan-snyk requires SNYK_TOKEN to be configured in the repository and
 # is gated to skip on fork pull requests.
 
-permissions:
-  contents: read
-  actions: read
-  security-events: write
-  issues: read
-  pull-requests: read
-  packages: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   workflows-policy:
+    permissions:
+      contents: read
     uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-workflows-policy.yml@01e2b12e992621fecf074b8a202f66044196f3bf # v1.0.4
 
   codeql-actions:
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
     uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-codeql.yml@d9792d01b442d7f2d3d2c6855cb312d885594e0f # v1.2.1
     with:
       languages: actions
@@ -37,6 +35,9 @@ jobs:
       upload-sarif: false
 
   lint:
+    permissions:
+      contents: read
+      security-events: write
     uses: ./.github/workflows/container-lint.yml
     with:
       containerfile: examples/hello/Containerfile
@@ -77,6 +78,10 @@ jobs:
       image-ref: ${{ needs.build-push.outputs.image_ref }}
 
   scan-grype:
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     uses: ./.github/workflows/container-scan-grype.yml
     with:
       image-name: hello-example-container
@@ -85,6 +90,10 @@ jobs:
       severity: critical
 
   scan-trivy:
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     uses: ./.github/workflows/container-scan-trivy.yml
     with:
       image-name: hello-example-container
@@ -94,6 +103,10 @@ jobs:
 
   scan-snyk:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     uses: ./.github/workflows/container-scan-snyk.yml
     with:
       image-name: hello-example-container
@@ -103,6 +116,8 @@ jobs:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   sbom:
+    permissions:
+      contents: read
     uses: ./.github/workflows/container-sbom.yml
     with:
       image-name: hello-example-container
@@ -111,6 +126,9 @@ jobs:
 
   sonarcloud:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+    permissions:
+      contents: read
+      pull-requests: read
     uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-sonarcloud.yml@01e2b12e992621fecf074b8a202f66044196f3bf # v1.0.4
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
