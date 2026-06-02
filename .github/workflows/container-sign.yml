@@ -7,12 +7,18 @@ on:
         description: "Fully-qualified pushed image reference to sign (e.g. ghcr.io/owner/image:sha)"
         type: string
         required: true
+      run_on_draft:
+        description: "Run even on draft PRs (default: skip on draft to save CI minutes)"
+        required: false
+        type: boolean
+        default: false
 
 # id-token: write is required for cosign keyless OIDC signing.
 # The calling workflow must grant this permission on the calling job.
 
 jobs:
   sign:
+    if: ${{ inputs.run_on_draft || vars.CI_RUN_ON_DRAFT == 'true' || github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     timeout-minutes: 30
     name: Cosign (keyless)
     permissions:
