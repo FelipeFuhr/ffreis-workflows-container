@@ -40,6 +40,11 @@ on:
         description: "Fully-qualified pushed image reference (image:sha), empty if not pushed"
         value: ${{ jobs.build.outputs.image_ref }}
 
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     timeout-minutes: 30
