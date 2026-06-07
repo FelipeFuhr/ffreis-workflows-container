@@ -91,7 +91,7 @@ jobs:
       - name: Install Snyk CLI
         run: |
           set -euo pipefail
-          npm install -g snyk@1.1296.2
+          npm install -g --ignore-scripts snyk@1.1296.2
           snyk --version
 
       - name: Snyk container scan
