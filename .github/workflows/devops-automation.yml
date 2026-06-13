@@ -2,12 +2,11 @@ name: DevOps / Automation
 
 on:
   schedule:
-    - cron: "53 1 26 * *"  # monthly scattered (was: 0 3 * * 0)
+    - cron: "0 3 * * 0" # Sundays 03:00 UTC
   workflow_dispatch:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
 
 concurrency:
@@ -22,7 +21,7 @@ jobs:
       actions: read
       security-events: write
       id-token: write
-    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-scorecard.yml@caa797cc7baec52e99f21b86f532a4b7c88cf4fa # fix/grype-install-outside-scan-path
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-scorecard.yml@ef5f76c297dba0d2990210a905d045c826092427 # v1.4.3
     with:
       upload-sarif: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
 
@@ -32,7 +31,7 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-stale.yml@caa797cc7baec52e99f21b86f532a4b7c88cf4fa # fix/grype-install-outside-scan-path
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-stale.yml@ef5f76c297dba0d2990210a905d045c826092427 # v1.4.3
     with:
       only: "both"
 
@@ -43,7 +42,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-release-please.yml@caa797cc7baec52e99f21b86f532a4b7c88cf4fa # fix/grype-install-outside-scan-path
+    uses: FelipeFuhr/ffreis-workflows-general/.github/workflows/general-release-please.yml@ef5f76c297dba0d2990210a905d045c826092427 # v1.4.3
     with:
       target-branch: "main"
     secrets:

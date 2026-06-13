@@ -1,6 +1,9 @@
 # Security Policy
 
-Report vulnerabilities privately via GitHub's security advisory system:
-https://github.com/FelipeFuhr/ffreis-workflows-container/security/advisories/new
+## Reporting a Vulnerability
 
-Response time: 5–7 business days.
+Please **do not** open a public GitHub issue for security vulnerabilities.
+
+Instead, use GitHub's private advisory system to report vulnerabilities confidentially:
+
+**[Report a vulnerability](https://github.com/FelipeFuhr/ffreis-workflows-container/security/advisories/new)**
