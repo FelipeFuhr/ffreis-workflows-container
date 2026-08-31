@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/FelipeFuhr/ffreis-workflows-container/compare/v1.0.0...v1.0.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* **ci:** remove redundant standalone scorecards.yml ([#69](https://github.com/FelipeFuhr/ffreis-workflows-container/issues/69)) ([6cbab16](https://github.com/FelipeFuhr/ffreis-workflows-container/commit/6cbab163e7953507f10c46e28f0f855fd6269254))
+* **container-build:** add top-level permissions + actions: read ([#71](https://github.com/FelipeFuhr/ffreis-workflows-container/issues/71)) ([de0dcba](https://github.com/FelipeFuhr/ffreis-workflows-container/commit/de0dcbae82bebf5a507be774c395216dc761285d))
+
 ## 1.0.0 (2026-08-01)
 
 
