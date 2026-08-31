@@ -58,6 +58,24 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Reusable workflows in this fleet consistently declare a top-level
+# `permissions:` even when every job's own block only narrows it further
+# (see e.g. ffreis-workflows-general's general-gitleaks.yml). This one
+# didn't, and it broke every caller: without a top-level grant, a job's own
+# `permissions:` request is capped by the CALLING repo's
+# `default_workflow_permissions` setting rather than by what this workflow
+# itself declares, so any caller repo defaulting to "read" (a common
+# security-hardening setting) gets a compile-time rejection the moment its
+# job asks for `packages: write` here -- 0 jobs, no annotations, invisible
+# to actionlint and to `gh pr checks` alike. Confirmed against
+# ffreis-org/ffreis-ml-data's container.yml, the first real caller: every
+# run failed this way until its caller-side top-level permissions block
+# AND this workflow's own `actions: read` (needed by the harden-runner step
+# below, also undeclared until now) were both present.
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     if: ${{ inputs.run_on_draft || vars.CI_RUN_ON_DRAFT == 'true' || github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
@@ -65,6 +83,7 @@ jobs:
     name: Container Build
     permissions:
       contents: read
+      actions: read
       packages: write
     runs-on: ${{ fromJson(inputs.runner) }}
     outputs:
